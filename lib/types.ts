@@ -12,6 +12,7 @@ export interface UserRow {
   phone_hash: string | null;
   name: string | null;
   age: number | null;
+  birth_date: string | null;
   major: string | null;
   main_campus: Campus | null;
   degree: Degree | null;

@@ -16,7 +16,7 @@ export default async function SetupPage() {
   const initial: ProfileInput | null = existing && {
     photos: [0, 1, 2, 3].map((i) => existing.photos.find((p) => p.position === i)?.url ?? null),
     name: existing.name,
-    age: existing.age,
+    birthDate: user.birth_date ?? "",
     major: existing.major,
     mainCampus: existing.mainCampus,
     degree: existing.degree,

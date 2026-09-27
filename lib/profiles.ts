@@ -1,3 +1,4 @@
+import { currentAge } from "./age";
 import { all } from "./db";
 import { residenceName } from "./residences";
 import type { Profile, ProfilePhoto, ProfilePrompt, ProfileTag, UserRow } from "./types";
@@ -50,7 +51,7 @@ export async function getProfiles(ids: string[], viewer: Pick<UserRow, "residenc
       {
         id: user.id,
         name: user.name!,
-        age: user.age!,
+        age: currentAge(user)!,
         major: user.major!,
         mainCampus: user.main_campus,
         degree: user.degree,

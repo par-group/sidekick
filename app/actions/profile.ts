@@ -1,5 +1,6 @@
 "use server";
 
+import { ageOn, isBirthDate } from "@/lib/age";
 import type { InStatement } from "@libsql/client";
 import { isCampus, isDegree, type Campus, type Degree } from "@/lib/academics";
 import { getCurrentUser } from "@/lib/auth";
@@ -13,7 +14,8 @@ import type { ActionResult, Gender, GenderFilterMode, ResidenceStatus } from "@/
 export type ProfileInput = {
   photos: (string | null)[];
   name: string;
-  age: number;
+  /** YYYY-MM-DD. Stored privately; only the age derived from it is shown. */
+  birthDate: string;
   major: string;
   mainCampus: Campus | null;
   degree: Degree | null;
@@ -35,7 +37,9 @@ function validate(input: ProfileInput): string | null {
   if (input.photos.length !== PHOTO_SLOTS || input.photos.some((p) => !p || !isOurImage(p))) return "Add all 4 photos.";
   const name = input.name.trim();
   if (name.length < 1 || name.length > 40) return "Add your name (up to 40 characters).";
-  if (!Number.isInteger(input.age) || input.age < MIN_AGE || input.age > MAX_AGE) return `You need to be ${MIN_AGE} or older to use Sidekick.`;
+  const age = isBirthDate(input.birthDate) ? ageOn(input.birthDate) : null;
+  if (age === null || age > MAX_AGE) return "Enter your birth date.";
+  if (age < MIN_AGE) return `You need to be ${MIN_AGE} or older to use Sidekick.`;
   if (input.major.trim().length < 2 || input.major.trim().length > 60) return "Add your major.";
   if (!isCampus(input.mainCampus)) return "Choose your main campus.";
   if (!isDegree(input.degree)) return "Choose your degree, or select Other or Undecided.";
@@ -75,9 +79,9 @@ export async function saveProfile(input: ProfileInput): Promise<ActionResult> {
   const custom = input.customTag.trim();
   const statements: InStatement[] = [
     {
-      sql: `UPDATE users SET name = ?, age = ?, major = ?, main_campus = ?, degree = ?, hometown = ?, residence_status = ?, residence_id = ?, gender = ?, gender_filter_mode = ?, profile_complete = 1
+      sql: `UPDATE users SET name = ?, age = ?, birth_date = ?, major = ?, main_campus = ?, degree = ?, hometown = ?, residence_status = ?, residence_id = ?, gender = ?, gender_filter_mode = ?, profile_complete = 1
             WHERE id = ?`,
-      args: [input.name.trim(), input.age, input.major.trim(), input.mainCampus, input.degree, input.hometown.trim() || null, input.residenceStatus,
+      args: [input.name.trim(), ageOn(input.birthDate), input.birthDate, input.major.trim(), input.mainCampus, input.degree, input.hometown.trim() || null, input.residenceStatus,
         input.residenceStatus === "residence" ? input.residenceId ?? null : null,
         input.gender, input.genderFilterMode, user.id],
     },

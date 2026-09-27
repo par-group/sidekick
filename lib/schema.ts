@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS users (
   phone_hash         TEXT,
   name               TEXT,
   age                INTEGER,
+  birth_date         TEXT,             -- YYYY-MM-DD, never shown; age is computed from it
   major              TEXT,
   main_campus        TEXT,
   degree             TEXT,

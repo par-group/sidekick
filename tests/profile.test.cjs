@@ -38,6 +38,7 @@ const { SCHEMA } = require("../lib/schema.ts");
 const { db, get, run } = require("../lib/db.ts");
 const { saveProfile } = require("../app/actions/profile.ts");
 const { getProfile } = require("../lib/profiles.ts");
+const { birthDateForAge } = require("../lib/age.ts");
 
 before(async () => {
   fs.mkdirSync(path.join(temp, "data"));
@@ -57,7 +58,7 @@ after(async () => {
 });
 
 const input = () => ({
-  name: "Alex", age: 19, major: "Psychology", mainCampus: "keele", degree: "BA", hometown: " Toronto ",
+  name: "Alex", birthDate: birthDateForAge(19), major: "Psychology", mainCampus: "keele", degree: "BA", hometown: " Toronto ",
   residenceStatus: "commuter", residenceId: null, gender: "rather_not_say", genderFilterMode: "everyone",
   photos: [0, 1, 2, 3].map((i) => `/api/placeholder/test-${i}`),
   tagIds: [1, 2, 3], customTag: "Coffee lover",
@@ -89,6 +90,15 @@ test("completed signup persists every section and supports editing hometown", as
   assert.equal((await getProfile("test-student")).hometown, "Ottawa");
 });
 
+test("the birth date is stored privately and only the age is shown", async () => {
+  assert.equal((await saveProfile({ ...input(), birthDate: "2006-03-15" })).ok, true);
+  const row = await get("SELECT birth_date FROM users WHERE id = 'test-student'");
+  assert.equal(row.birth_date, "2006-03-15");
+  const profile = await getProfile("test-student");
+  assert.equal(typeof profile.age, "number");
+  assert.equal(JSON.stringify(profile).includes("2006-03-15"), false, "the public profile never includes the birth date");
+});
+
 test("hometown and residence can be skipped or cleared", async () => {
   assert.equal((await saveProfile({ ...input(), hometown: "", residenceStatus: null })).ok, true);
   const profile = await getProfile("test-student");
@@ -100,7 +110,8 @@ test("invalid signup cannot mark the account complete", async () => {
   await run("UPDATE users SET profile_complete = 0 WHERE id = 'test-student'");
   for (const patch of [
     { mainCampus: null }, { mainCampus: "fake-campus" }, { degree: null }, { degree: "fake-degree" },
-    { age: 17 }, { hometown: "x".repeat(81) }, { major: "" },
+    { birthDate: birthDateForAge(17) }, { birthDate: "" }, { birthDate: "2004-02-30" }, { birthDate: "3000-01-01" },
+    { hometown: "x".repeat(81) }, { major: "" },
     { prompts: input().prompts.map((p) => ({ ...p, promptId: 1 })) },
     { prompts: input().prompts.map((p) => ({ ...p, answer: "" })) },
   ]) assert.equal((await saveProfile({ ...input(), ...patch })).ok, false);

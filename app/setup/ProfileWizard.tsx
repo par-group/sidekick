@@ -14,11 +14,17 @@ import type { Gender, ProfileTag, ResidenceStatus } from "@/lib/types";
 import { uploadImage } from "@/lib/uploadImage";
 import { YORK_RESIDENCES } from "@/lib/residences";
 import { CAMPUSES, DEGREES, isCampus, isDegree } from "@/lib/academics";
+import { ageOn, birthDateForAge } from "@/lib/age";
+
+function isAdultBirthDate(birthDate: string) {
+  const age = ageOn(birthDate);
+  return age !== null && age >= MIN_AGE && age <= MAX_AGE;
+}
 
 const EMPTY: ProfileInput = {
   photos: [null, null, null, null],
   name: "",
-  age: 0,
+  birthDate: "",
   major: "",
   mainCampus: null,
   degree: null,
@@ -72,7 +78,7 @@ export function ProfileWizard({
       && !form.prompts.some((other, i) => i !== index && other.promptId === prompt.promptId);
   };
   const stepValid = [
-    form.name.trim().length > 0 && form.name.trim().length <= 40 && Number.isInteger(form.age) && form.age >= MIN_AGE && form.age <= MAX_AGE,
+    form.name.trim().length > 0 && form.name.trim().length <= 40 && isAdultBirthDate(form.birthDate),
     isCampus(form.mainCampus) && isDegree(form.degree) && form.major.trim().length >= 2 && form.major.trim().length <= 60 && form.hometown.trim().length <= 80,
     !!form.gender,
     form.tagIds.length >= MIN_INTERESTS && form.tagIds.length <= MAX_INTERESTS,
@@ -292,6 +298,8 @@ function Segmented<T extends string>({
 }
 
 function BasicsStep({ form, update }: { form: ProfileInput; update: (p: Partial<ProfileInput>) => void }) {
+  const age = ageOn(form.birthDate);
+  const tooYoung = age !== null && age < MIN_AGE;
   return (
     <div className="flex flex-col gap-5">
       <label>
@@ -299,19 +307,22 @@ function BasicsStep({ form, update }: { form: ProfileInput; update: (p: Partial<
         <input className="field" value={form.name} autoComplete="given-name" required maxLength={40} onChange={(e) => update({ name: e.target.value })} placeholder="Alex" />
       </label>
       <label>
-        <span className="label">How old are you?</span>
+        <span className="label">Birth date</span>
         <input
           className="field"
-          inputMode="numeric"
-          value={form.age || ""}
-          onChange={(e) => update({ age: Number(e.target.value.replace(/\D/g, "").slice(0, 2)) })}
-          placeholder="19"
+          type="date"
+          value={form.birthDate}
+          min={birthDateForAge(MAX_AGE + 1)}
+          max={birthDateForAge(MIN_AGE)}
+          onChange={(e) => update({ birthDate: e.target.value })}
+          autoComplete="bday"
           required
           aria-describedby="age-help"
         />
       </label>
-      <p id="age-help" className={`text-sm ${form.age > 0 && form.age < MIN_AGE ? "text-danger" : "text-ink-soft"}`}>
-        Sidekick is for students {MIN_AGE} and over. Your first name and age appear on your profile.
+      <p id="age-help" className={`text-sm ${tooYoung ? "text-danger" : "text-ink-soft"}`}>
+        {tooYoung ? `Sidekick is for students ${MIN_AGE} and over.` : age !== null ? `You're ${age}.` : `Sidekick is for students ${MIN_AGE} and over.`}{" "}
+        Your profile shows your first name and age, never your birth date.
       </p>
     </div>
   );

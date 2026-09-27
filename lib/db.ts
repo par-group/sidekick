@@ -31,7 +31,7 @@ async function init(): Promise<Client> {
 
   // Add optional profile fields to older databases without replacing any data.
   const columns = (await client.execute("PRAGMA table_info(users)")).rows.map((column) => column.name);
-  for (const name of ["hometown", "residence_id", "main_campus", "degree"] as const) {
+  for (const name of ["hometown", "residence_id", "main_campus", "degree", "birth_date"] as const) {
     if (!columns.includes(name)) {
       try {
         await client.execute(`ALTER TABLE users ADD COLUMN ${name} TEXT`);

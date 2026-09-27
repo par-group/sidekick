@@ -17,6 +17,11 @@ export const USE_BLOB = !!process.env.BLOB_READ_WRITE_TOKEN;
 let access: BlobAccessType | null = (process.env.BLOB_ACCESS as BlobAccessType | undefined) ?? null;
 const blobPath = (name: string) => `uploads/${name}`;
 
+/** False on Vercel without Blob storage: the server disk there is read-only. */
+export function uploadsAvailable() {
+  return USE_BLOB || !process.env.VERCEL;
+}
+
 export async function saveUpload(name: string, data: Buffer, contentType: string) {
   if (!USE_BLOB) {
     if (process.env.VERCEL) throw new Error("BLOB_READ_WRITE_TOKEN is not set (see README).");
