@@ -1,0 +1,78 @@
+import "server-only";
+import { createClient, type Client, type InArgs, type Transaction } from "@libsql/client";
+import fs from "node:fs";
+import path from "node:path";
+import { migrate } from "./migrate";
+import { seed } from "./seed";
+
+// Local dev: a SQLite file in ./data (no setup). Deployed (e.g. Vercel, whose disk is
+// read-only): a hosted Turso database via TURSO_DATABASE_URL + TURSO_AUTH_TOKEN.
+export const DATA_DIR = path.join(process.cwd(), "data");
+export const UPLOAD_DIR = path.join(DATA_DIR, "uploads");
+export const IS_HOSTED_DB = !!process.env.TURSO_DATABASE_URL;
+
+/** Anything that can run a statement: the client itself or an open transaction. */
+export type Executor = Pick<Client | Transaction, "execute">;
+
+const globalForDb = globalThis as unknown as { __sidekickDb?: Promise<Client> };
+
+async function init(): Promise<Client> {
+  if (!IS_HOSTED_DB && process.env.VERCEL) {
+    throw new Error("TURSO_DATABASE_URL is not set. Vercel's filesystem is read-only, so a hosted database is required (see docs/deployment.md).");
+  }
+  if (!IS_HOSTED_DB) fs.mkdirSync(DATA_DIR, { recursive: true });
+  const client = createClient(
+    IS_HOSTED_DB
+      ? { url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN }
+      : { url: `file:${path.join(/*turbopackIgnore: true*/ DATA_DIR, "sidekick.db")}` },
+  );
+  if (!IS_HOSTED_DB) await client.execute("PRAGMA journal_mode = WAL");
+  await client.execute("PRAGMA foreign_keys = ON");
+  await migrate(client);
+  await seed(client);
+  return client;
+}
+
+/** Lazily connects, migrates and seeds, once per server instance. */
+export function db(): Promise<Client> {
+  globalForDb.__sidekickDb ??= init().catch((e) => {
+    globalForDb.__sidekickDb = undefined; // retry on the next request
+    throw e;
+  });
+  return globalForDb.__sidekickDb;
+}
+
+const plain = <T>(rows: Record<string, unknown>[]): T[] => rows.map((r) => ({ ...r }) as T);
+
+async function exec(sql: string, args: InArgs = [], ex?: Executor) {
+  return (ex ?? (await db())).execute({ sql, args });
+}
+
+export async function all<T>(sql: string, args?: InArgs, ex?: Executor): Promise<T[]> {
+  return plain<T>((await exec(sql, args, ex)).rows as unknown as Record<string, unknown>[]);
+}
+
+export async function get<T>(sql: string, args?: InArgs, ex?: Executor): Promise<T | null> {
+  return (await all<T>(sql, args, ex))[0] ?? null;
+}
+
+export async function run(sql: string, args?: InArgs, ex?: Executor): Promise<{ changes: number }> {
+  return { changes: (await exec(sql, args, ex)).rowsAffected };
+}
+
+/** Interactive write transaction; rolls back if `fn` throws. */
+export async function tx<T>(fn: (t: Transaction) => Promise<T>): Promise<T> {
+  const t = await (await db()).transaction("write");
+  try {
+    const result = await fn(t);
+    await t.commit();
+    return result;
+  } catch (e) {
+    await t.rollback().catch(() => {});
+    throw e;
+  } finally {
+    t.close();
+  }
+}
+
+export const newId = () => crypto.randomUUID();

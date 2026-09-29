@@ -1,0 +1,77 @@
+import type { Metadata } from "next";
+import Link from "next/link";
+import { BlockPhoneForm } from "@/components/account/BlockPhoneForm";
+import { AccountActivation } from "@/components/account/AccountActivation";
+import { ChevronLeft } from "@/components/ui/icons";
+import { logout } from "@/server/actions/auth";
+import { requireOnboardedUser } from "@/server/auth/session";
+import { get } from "@/server/db/client";
+import { isDemoAccount } from "@/server/demo/account";
+import { DemoTools, GenderFilterSetting } from "./SettingsForms";
+
+export const metadata: Metadata = { title: "Settings" };
+
+const HELP_LINKS = [
+  { href: "/support", label: "Help & support" },
+  { href: "/privacy", label: "Privacy Policy" },
+  { href: "/terms", label: "Terms of Use" },
+] as const;
+
+export default async function SettingsPage() {
+  const user = await requireOnboardedUser({ allowInactive: true });
+  if (!user.is_active) return (
+    <div className="flex flex-col gap-5">
+      <h1 className="font-serif text-3xl font-semibold">Settings</h1>
+      <p className="text-ink-soft">Your account is deactivated.</p>
+      <AccountActivation active={false} />
+      <form action={logout}><button className="btn-secondary">Log out</button></form>
+    </div>
+  );
+  const demo = isDemoAccount(user);
+  const cooldowns = demo
+    ? ((await get<{ n: number }>("SELECT COUNT(*) AS n FROM pass_states WHERE swiper_id = ? AND state = 'cooldown_pending'", [user.id]))?.n ?? 0)
+    : 0;
+
+  return (
+    <div className="flex flex-col gap-4 pt-2">
+      <h1 className="px-1 font-serif text-3xl font-semibold">Settings</h1>
+
+      <section className="card p-5">
+        <h2 className="font-serif text-xl font-semibold">Who you see</h2>
+        <p className="mt-1 mb-4 text-sm text-ink-soft">Applies to Discover. People who chose &ldquo;same gender&rdquo; are only shown to matching users too.</p>
+        <GenderFilterSetting initial={user.gender_filter_mode} canUseSameGender={user.gender !== "rather_not_say"} />
+      </section>
+
+      <section className="card p-5">
+        <h2 className="font-serif text-xl font-semibold">Block a phone number</h2>
+        <p className="mt-1 mb-4 text-sm text-ink-soft">
+          Keep someone you know off your radar. We never tell you whether a number is on Sidekick, and they&apos;re never told either.
+        </p>
+        <BlockPhoneForm />
+      </section>
+
+      {demo && <DemoTools cooldowns={cooldowns} />}
+
+      <AccountActivation active />
+
+      <nav aria-label="Help and legal" className="card flex flex-col divide-y divide-line px-5">
+        {HELP_LINKS.map(({ href, label }) => (
+          <Link key={href} href={href} className="flex items-center justify-between py-4 text-sm font-semibold">
+            {label}
+            <ChevronLeft className="size-4 rotate-180 text-ink-soft" />
+          </Link>
+        ))}
+      </nav>
+
+      <section className="card flex items-center justify-between gap-3 p-5">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold tracking-wide text-ink-soft uppercase">Signed in as</p>
+          <p className="truncate text-sm">{user.email}</p>
+        </div>
+        <form action={logout}>
+          <button className="btn-secondary">Log out</button>
+        </form>
+      </section>
+    </div>
+  );
+}

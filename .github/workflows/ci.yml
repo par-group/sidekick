@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  app-demo:
+    name: app-demo · lint, typecheck, test and build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app-demo
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: app-demo/.nvmrc
+          cache: npm
+          cache-dependency-path: app-demo/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
